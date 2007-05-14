@@ -32,10 +32,10 @@ import cherrypy
 import kid
 
 class KidRender(cherrypy.Tool):
-    def __init__(self):
-        self._name = None
-        self._point = 'before_finalize'
-        self._priority = 99
+    def __init__(self, name=None, priority = 0):
+        self._name = name
+        self._point = 'before_handler'
+        self._priority = priority
         self._templatecache = {}
 
     def callable(self, template, output=None, encoding='utf-8',
@@ -55,17 +55,23 @@ class KidRender(cherrypy.Tool):
             @param encoding: Character encoding to use in the output
             @param assume_encoding: Format to use when parsing the kid template
         '''
-        templ = self._templatecache.get(template, None)
-        if not templ:
-            templ = kid.import_template(name=template)
-            self._templatecache[template] = templ
-        t = templ.Template(**cherrypy.response.body)
-        t.assume_encoding=assume_encoding
-        cherrypy.response.body = t.serialize(output=output, encoding=encoding)
-        if output is None or 'xhtml' in output:
-            if 'application/xhtml+xml' in cherrypy.request.headers['Accept']:
-                cherrypy.response.headers['Content-Type'] = 'application/xhtml+xml'
-            else:
-                #This is nasty, but such is the state of XHTML today
-                cherrypy.response.headers['Content-Type'] = 'text/html; charset=%s' % encoding
+        cherrypy.request._handler = cherrypy.request.handler
+        def wrap(*args, **kwargs):
+            ret = cherrypy.request._handler(*args, **kwargs)
+            templ = self._templatecache.get(template, None)
+            if not templ:
+                templ = kid.import_template(name=template)
+                self._templatecache[template] = templ
+            t = templ.Template(**ret)
+            t.assume_encoding=assume_encoding
+            out = t.serialize(output=output, encoding=encoding)
+            if output is None or 'xhtml' in output:
+                if 'application/xhtml+xml' in cherrypy.request.headers['Accept']:
+                    cherrypy.response.headers['Content-Type'] = 'application/xhtml+xml'
+                else:
+                    #This is nasty, but such is the state of XHTML today
+                    cherrypy.response.headers['Content-Type'] = 'text/html; charset=%s' % encoding
+            return out
+
+        cherrypy.request.handler = wrap
 
