@@ -6,7 +6,7 @@ import status
 
 cherrypy.tools.status = status.StatusMonitor()
 cherrypy.config.update({"tools.status.on": True})
-cherrypy.tree.mount(Root(), '/cpstatus')
+cherrypy.tree.mount(status.Root(), '/cpstatus')
 """
 
 import threading
